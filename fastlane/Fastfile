@@ -35,11 +35,68 @@ platform :mac do
   lane :test do
     scan_clipy
   end
-  
-  desc "Release"
-  lane :release do
-    # TODO: Use :codesigning_identity options (Developer ID Application: Shunsuke Furubayashi (BBCHAJ584H))
-    # TODO: Use :export_method options (developer-id)
+
+  desc "Build a release .app and package it as a DMG. Outputs to ./build/"
+  desc "Usage: bundle exec fastlane release [version:1.3.0]"
+  desc ""
+  desc "Ad-hoc signing (no Apple Developer account required)."
+  desc "For a Developer-ID-signed build, run `fastlane setup_release_id` first"
+  desc "and pass your codesigning identity to xcodebuild."
+  lane :release do |options|
+    # ── Resolve version ────────────────────────────────────────────────────
+    version = options[:version] ||
+              get_info_plist_value(
+                path: "Clipy/Supporting Files/Info.plist",
+                key: "CFBundleShortVersionString"
+              )
+    UI.message "Building Clipy v#{version}"
+
+    # ── Paths ──────────────────────────────────────────────────────────────
+    build_dir    = File.expand_path("build")
+    archive_path = "#{build_dir}/Clipy.xcarchive"
+    app_path     = "#{build_dir}/Clipy.app"
+    staging_dir  = "#{build_dir}/dmg-staging"
+    dmg_name     = "Clipy-#{version}.dmg"
+    dmg_path     = "#{build_dir}/#{dmg_name}"
+
+    sh "rm -rf '#{build_dir}' && mkdir -p '#{build_dir}'" if build_dir.include?("build") && !build_dir.strip.empty?
+
+    # ── Archive ────────────────────────────────────────────────────────────
+    sh(
+      "xcodebuild archive" \
+      " -workspace Clipy.xcworkspace" \
+      " -scheme Clipy" \
+      " -configuration Release" \
+      " -archivePath '#{archive_path}'" \
+      " CODE_SIGN_IDENTITY='-'" \
+      " CODE_SIGNING_REQUIRED=YES" \
+      " SKIP_INSTALL=NO" \
+      " | xcpretty"
+    )
+
+    # ── Extract .app ───────────────────────────────────────────────────────
+    sh "cp -R '#{archive_path}/Products/Applications/Clipy.app' '#{app_path}'"
+
+    # ── Build DMG (drag-to-install with Applications shortcut) ─────────────
+    sh "rm -rf '#{staging_dir}' && mkdir -p '#{staging_dir}'"
+    sh "cp -R '#{app_path}' '#{staging_dir}/'"
+    sh "ln -s /Applications '#{staging_dir}/Applications'"
+    sh(
+      "hdiutil create" \
+      " -volname 'Clipy'" \
+      " -srcfolder '#{staging_dir}'" \
+      " -ov" \
+      " -format UDZO" \
+      " '#{dmg_path}'"
+    )
+
+    UI.success "✅  DMG ready: #{dmg_path}"
+    UI.message ""
+    UI.message "This build uses ad-hoc (local) signing. Gatekeeper will block it"
+    UI.message "on other Macs. Users can bypass it with:"
+    UI.message "  sudo xattr -rd com.apple.quarantine /Applications/Clipy.app"
+    UI.message ""
+    UI.message "For a distributable build, use a Developer ID Application certificate."
   end
 
   ####################### PRIVATE LANES ########################
