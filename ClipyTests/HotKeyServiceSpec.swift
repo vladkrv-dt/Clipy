@@ -245,7 +245,12 @@ class HotKeyServiceSpec: QuickSpec {
                 expect(service.clearHistoryKeyCombo) == keyCombo
 
                 let savedData = UserDefaults.standard.object(forKey: Constants.HotKey.clearHistoryKeyCombo) as? Data
-                let savedKeyCombo = NSKeyedUnarchiver.unarchiveObject(with: savedData!) as? KeyCombo
+                let savedKeyCombo: KeyCombo?
+                if #available(macOS 10.13, *) {
+                    savedKeyCombo = try? NSKeyedUnarchiver.unarchivedObject(ofClass: KeyCombo.self, from: savedData!)
+                } else {
+                    savedKeyCombo = NSKeyedUnarchiver.unarchiveObject(with: savedData!) as? KeyCombo
+                }
                 expect(savedKeyCombo) == keyCombo
 
                 service.changeClearHistoryKeyCombo(nil)
