@@ -57,7 +57,7 @@ final class PasteService {
 extension PasteService {
     func paste(with clip: CPYClip) {
         guard !clip.isInvalidated else { return }
-        guard let data = NSKeyedUnarchiver.unarchiveObject(withFile: clip.dataPath) as? CPYClipData else { return }
+        guard let data = unarchiveClipData(from: clip.dataPath) else { return }
 
         // Handling modifier actions
         let isPastePlainText = self.isPastePlainText
@@ -98,7 +98,7 @@ extension PasteService {
     func copyToPasteboard(with clip: CPYClip) {
         lock.lock(); defer { lock.unlock() }
 
-        guard let data = NSKeyedUnarchiver.unarchiveObject(withFile: clip.dataPath) as? CPYClipData else { return }
+        guard let data = unarchiveClipData(from: clip.dataPath) else { return }
 
         if isPastePlainText {
             copyToPasteboard(with: data.stringValue)
@@ -162,5 +162,16 @@ extension PasteService {
             keyVDown?.post(tap: .cgAnnotatedSessionEventTap)
             keyVUp?.post(tap: .cgAnnotatedSessionEventTap)
         }
+    }
+}
+
+// MARK: - Helpers
+private extension PasteService {
+    func unarchiveClipData(from path: String) -> CPYClipData? {
+        if #available(macOS 10.13, *) {
+            guard let fileData = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+            return try? NSKeyedUnarchiver.unarchivedObject(ofClass: CPYClipData.self, from: fileData)
+        }
+        return NSKeyedUnarchiver.unarchiveObject(withFile: path) as? CPYClipData
     }
 }

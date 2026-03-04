@@ -152,7 +152,14 @@ extension ClipService {
             // Save Realm and .data file
             let dispatchRealm = try! Realm()
             if CPYUtilities.prepareSaveToPath(CPYUtilities.applicationSupportFolder()) {
-                if NSKeyedArchiver.archiveRootObject(data, toFile: savedPath) {
+                let archived: Bool
+                if #available(macOS 10.13, *),
+                   let archivedData = try? NSKeyedArchiver.archivedData(withRootObject: data, requiringSecureCoding: true) {
+                    archived = (try? archivedData.write(to: URL(fileURLWithPath: savedPath))) != nil
+                } else {
+                    archived = NSKeyedArchiver.archiveRootObject(data, toFile: savedPath)
+                }
+                if archived {
                     dispatchRealm.transaction {
                         dispatchRealm.add(clip, update: .all)
                     }

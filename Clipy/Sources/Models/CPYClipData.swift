@@ -13,7 +13,9 @@
 import Cocoa
 import SwiftHEXColors
 
-final class CPYClipData: NSObject {
+final class CPYClipData: NSObject, NSSecureCoding {
+
+    static var supportsSecureCoding: Bool { return true }
 
     // MARK: - Properties
     fileprivate let kTypesKey       = "types"
@@ -158,13 +160,13 @@ final class CPYClipData: NSObject {
     }
 
     @objc required init(coder aDecoder: NSCoder) {
-        types = (aDecoder.decodeObject(forKey: kTypesKey) as? [String])?.compactMap { NSPasteboard.PasteboardType(rawValue: $0) } ?? []
-        fileNames = aDecoder.decodeObject(forKey: kFileNamesKey) as? [String] ?? [String]()
-        URLs = aDecoder.decodeObject(forKey: kURLsKey) as? [String] ?? [String]()
-        stringValue = aDecoder.decodeObject(forKey: kStringValueKey) as? String ?? ""
-        RTFData = aDecoder.decodeObject(forKey: kRTFDataKey) as? Data
-        PDF = aDecoder.decodeObject(forKey: kPDFKey) as? Data
-        image = aDecoder.decodeObject(forKey: kImageKey) as? NSImage
+        types = (aDecoder.decodeObject(of: [NSArray.self, NSString.self], forKey: kTypesKey) as? [String])?.compactMap { NSPasteboard.PasteboardType(rawValue: $0) } ?? []
+        fileNames = aDecoder.decodeObject(of: [NSArray.self, NSString.self], forKey: kFileNamesKey) as? [String] ?? [String]()
+        URLs = aDecoder.decodeObject(of: [NSArray.self, NSString.self], forKey: kURLsKey) as? [String] ?? [String]()
+        stringValue = aDecoder.decodeObject(of: NSString.self, forKey: kStringValueKey) as String? ?? ""
+        RTFData = aDecoder.decodeObject(of: NSData.self, forKey: kRTFDataKey) as Data?
+        PDF = aDecoder.decodeObject(of: NSData.self, forKey: kPDFKey) as Data?
+        image = aDecoder.decodeObject(of: NSImage.self, forKey: kImageKey)
         super.init()
     }
 }
