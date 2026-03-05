@@ -74,8 +74,12 @@ struct AppEnvironment {
 
     static func fromStorage(defaults: UserDefaults = .standard) -> Environment {
         var excludeApplications = [CPYAppInfo]()
-        if let data = defaults.object(forKey: Constants.UserDefaults.excludeApplications) as? Data, let applications = NSKeyedUnarchiver.unarchiveObject(with: data) as? [CPYAppInfo] {
-            excludeApplications = applications
+        if let data = defaults.object(forKey: Constants.UserDefaults.excludeApplications) as? Data {
+            if #available(macOS 10.13, *) {
+                excludeApplications = (try? NSKeyedUnarchiver.unarchivedObject(ofClasses: [NSArray.self, CPYAppInfo.self], from: data) as? [CPYAppInfo]) ?? []
+            } else if let applications = NSKeyedUnarchiver.unarchiveObject(with: data) as? [CPYAppInfo] {
+                excludeApplications = applications
+            }
         }
         let excludeAppService = ExcludeAppService(applications: excludeApplications)
         return Environment(clipService: current.clipService,

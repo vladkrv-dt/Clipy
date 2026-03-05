@@ -5,13 +5,18 @@ import Nimble
 class DraggedDataSpec: QuickSpec {
     override func spec() {
 
-        describe("NSCoding") {
+        describe("NSSecureCoding") {
 
-            it("Archive data") {
+            it("Archive and unarchive data") {
                 let draggedData = CPYDraggedData(type: .folder, folderIdentifier: NSUUID().uuidString, snippetIdentifier: nil, index: 10)
-                let data = NSKeyedArchiver.archivedData(withRootObject: draggedData)
+                let data = draggedData.archive()
 
-                let unarchiveData = NSKeyedUnarchiver.unarchiveObject(with: data) as? CPYDraggedData
+                let unarchiveData: CPYDraggedData?
+                if #available(macOS 10.13, *) {
+                    unarchiveData = try? NSKeyedUnarchiver.unarchivedObject(ofClass: CPYDraggedData.self, from: data)
+                } else {
+                    unarchiveData = NSKeyedUnarchiver.unarchiveObject(with: data) as? CPYDraggedData
+                }
                 expect(unarchiveData).toNot(beNil())
                 expect(unarchiveData?.type) == draggedData.type
                 expect(unarchiveData?.folderIdentifier) == draggedData.folderIdentifier

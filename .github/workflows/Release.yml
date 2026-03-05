@@ -1,0 +1,132 @@
+name: Release
+
+# Trigger on a version tag push (e.g. git tag v1.3.0 && git push --tags)
+# or manually via the GitHub Actions UI.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  SCHEME: Clipy
+  WORKSPACE: Clipy.xcworkspace
+  CONFIGURATION: Release
+  ARCHIVE_PATH: ${{ runner.temp }}/Clipy.xcarchive
+  APP_PATH: ${{ runner.temp }}/Clipy.app
+  STAGING_DIR: ${{ runner.temp }}/dmg-staging
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── Ruby / Bundler ────────────────────────────────────────────────────
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '2.7'
+          bundler-cache: true   # runs `bundle install` and caches gems
+
+      # ── CocoaPods cache ───────────────────────────────────────────────────
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('Podfile.lock') }}
+          restore-keys: ${{ runner.os }}-pods-
+
+      # ── Install Pods ──────────────────────────────────────────────────────
+      - name: Pod install
+        run: bundle exec pod install
+
+      # ── Resolve version ───────────────────────────────────────────────────
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            # Fall back to the version embedded in Info.plist (manual dispatch)
+            VERSION=$(/usr/libexec/PlistBuddy \
+              -c "Print CFBundleShortVersionString" \
+              "Clipy/Supporting Files/Info.plist")
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building Clipy v$VERSION"
+
+      # ── Archive ───────────────────────────────────────────────────────────
+      # Ad-hoc signing (CODE_SIGN_IDENTITY="-") requires no certificate.
+      # Note: the resulting .app is unsigned by Apple and Gatekeeper will
+      # block it on other Macs. Users can bypass by right-clicking → Open,
+      # or by running: sudo xattr -rd com.apple.quarantine /Applications/Clipy.app
+      # For a fully trusted build you need a Developer ID Application
+      # certificate and should set CODE_SIGN_IDENTITY and DEVELOPMENT_TEAM.
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -archivePath "$ARCHIVE_PATH" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            SKIP_INSTALL=NO \
+            | xcpretty
+
+      # ── Extract .app from archive ─────────────────────────────────────────
+      - name: Extract .app
+        run: |
+          cp -R "$ARCHIVE_PATH/Products/Applications/Clipy.app" "$APP_PATH"
+
+      # ── Build DMG ─────────────────────────────────────────────────────────
+      # Creates a drag-to-install DMG with an Applications shortcut.
+      - name: Build DMG
+        id: dmg
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          DMG_NAME="Clipy-${VERSION}.dmg"
+          DMG_PATH="${RUNNER_TEMP}/${DMG_NAME}"
+
+          # Staging folder: app + Applications shortcut
+          mkdir -p "$STAGING_DIR"
+          cp -R "$APP_PATH" "$STAGING_DIR/"
+          ln -s /Applications "$STAGING_DIR/Applications"
+
+          hdiutil create \
+            -volname "Clipy" \
+            -srcfolder "$STAGING_DIR" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
+
+          echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_OUTPUT"
+          echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_OUTPUT"
+
+      # ── Create GitHub Release and upload DMG ──────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Clipy v${{ steps.version.outputs.VERSION }}"
+          tag_name: "v${{ steps.version.outputs.VERSION }}"
+          generate_release_notes: true
+          files: ${{ steps.dmg.outputs.DMG_PATH }}
+          body: |
+            ## Clipy v${{ steps.version.outputs.VERSION }}
+
+            ### Installation
+            1. Download `${{ steps.dmg.outputs.DMG_NAME }}` below.
+            2. Open the DMG and drag **Clipy.app** to your **Applications** folder.
+            3. Launch Clipy from Applications.
+
+            > **Gatekeeper note:** This build uses ad-hoc (local) code signing.
+            > If macOS blocks the app, right-click → **Open** and confirm,
+            > or run in Terminal:
+            > ```
+            > sudo xattr -rd com.apple.quarantine /Applications/Clipy.app
+            > ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

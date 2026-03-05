@@ -22,7 +22,7 @@ xcode-select --install
 <td width="33%" align="center">macOS or Linux with Ruby 2.0.0 or above</td>
 </tr>
 <tr>
-<td width="33%"><code>brew cask install fastlane</code></td>
+<td width="33%"><code>brew install fastlane</code></td>
 <td width="33%"><a href="https://download.fastlane.tools">Download the zip file</a>. Then double click on the <code>install</code> script (or run it in a terminal window).</td>
 <td width="33%"><code>sudo gem install fastlane -NV</code></td>
 </tr>
@@ -35,16 +35,28 @@ xcode-select --install
 fastlane mac setup
 ```
 Setup development
+
 ### mac setup_release_id
 ```
 fastlane mac setup_release_id
 ```
 Setup release developer id account settings. (only use admin)
+
 ### mac test
 ```
 fastlane mac test
 ```
 Runs all the tests
+
+### mac release
+```
+fastlane mac release [version:1.3.0]
+```
+Build a release .app and package it as a DMG. Outputs to `./build/`.
+
+Uses ad-hoc signing by default (no Apple Developer account required).
+For a notarized build distributable to all users without Gatekeeper warnings,
+you need a **Developer ID Application** certificate — run `setup_release_id` first.
 
 ----
 
