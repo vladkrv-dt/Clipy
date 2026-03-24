@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.2'
+        bundler-cache: true
+
+    - name: Cache CocoaPods
+      uses: actions/cache@v4
+      with:
+        path: Pods
+        key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pods-
+
+    - name: Pod install
+      run: bundle exec pod install
+
+    - name: Build Release
+      run: |
+        xcodebuild \
+          -workspace Clipy.xcworkspace \
+          -scheme Clipy \
+          -configuration Release \
+          -derivedDataPath build \
+          -arch arm64 \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          clean build
+
+    - name: Create DMG
+      run: |
+        APP_PATH="build/Build/Products/Release/Clipy.app"
+        DMG_NAME="Clipy-arm64.dmg"
+        STAGING_DIR="build/dmg-staging"
+
+        mkdir -p "${STAGING_DIR}"
+        cp -R "${APP_PATH}" "${STAGING_DIR}/"
+        ln -s /Applications "${STAGING_DIR}/Applications"
+
+        hdiutil create \
+          -volname "Clipy" \
+          -srcfolder "${STAGING_DIR}" \
+          -ov \
+          -format UDZO \
+          "${DMG_NAME}"
+
+    - name: Upload DMG artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Clipy-arm64
+        path: Clipy-arm64.dmg

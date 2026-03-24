@@ -1,4 +1,4 @@
-platform :osx, '10.10'
+platform :osx, '11.0'
 use_frameworks!
 
 target 'Clipy' do
@@ -6,7 +6,6 @@ target 'Clipy' do
   # Application
   pod 'PINCache'
   pod 'Sauce'
-  pod 'Sparkle'
   pod 'RealmSwift'
   pod 'RxCocoa'
   pod 'RxSwift'
